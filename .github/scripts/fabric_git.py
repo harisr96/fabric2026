@@ -11,7 +11,7 @@ Commands
 
 Environment variables (set as GitHub secrets / variables)
   AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET   service principal
-  FABRIC_GIT_PAT                                           GitHub token (setup only)
+  FABRIC_GIT_PAT                                           GitHub token (only if the script must create the connection)
   GH_OWNER, GH_REPO                                        e.g. hari-sr / fabric2026
   FABRIC_GIT_CONNECTION_NAME                               optional, default github-fabric2026-sp
   FABRIC_GIT_FOLDER                                        optional, default: repo root
@@ -23,6 +23,8 @@ import time
 
 import requests
 from azure.identity import ClientSecretCredential
+
+sys.stdout.reconfigure(line_buffering=True)  # print messages in order in the GitHub log
 
 API = "https://api.fabric.microsoft.com/v1"
 SESSION = requests.Session()
@@ -119,6 +121,24 @@ def get_or_create_connection():
     return response.json()["id"]
 
 
+def ensure_my_git_credentials(workspace_id):
+    """Each identity needs its own Git credentials on a workspace. If DEV was connected by a
+    person (by hand in Fabric), give the service principal credentials too, using the shared
+    connection, so it can update the workspace from Git."""
+    current = call("GET", f"/workspaces/{workspace_id}/git/myGitCredentials")
+    source = current.get("source")
+    print(f"Service principal Git credentials on this workspace: {source}")
+    if source == "ConfiguredConnection":
+        return
+    connection_id = get_or_create_connection()
+    call(
+        "PATCH",
+        f"/workspaces/{workspace_id}/git/myGitCredentials",
+        {"source": "ConfiguredConnection", "connectionId": connection_id},
+    )
+    print("Service principal Git credentials set on this workspace.")
+
+
 def git_state(workspace_id):
     return call("GET", f"/workspaces/{workspace_id}/git/connection").get("gitConnectionState", "NotConnected")
 
@@ -172,9 +192,8 @@ def setup(workspace_id, branch, strategy):
             "ownerName": env("GH_OWNER"),
             "repositoryName": env("GH_REPO"),
             "branchName": branch,
+            "directoryName": folder or "/",   # "/" = repo root (Fabric requires this field)
         }
-        if folder:
-            details["directoryName"] = folder
         body = {
             "gitProviderDetails": details,
             "myGitCredentials": {"source": "ConfiguredConnection", "connectionId": connection_id},
@@ -195,6 +214,8 @@ def setup(workspace_id, branch, strategy):
             sys.exit(f"POST /workspaces/{workspace_id}/git/connect failed ({response.status_code}): {response.text}")
         print(f"Connected workspace to branch '{branch}'.")
         state = "Connected"
+    else:
+        ensure_my_git_credentials(workspace_id)   # workspace was connected by hand
 
     if state == "Connected":
         result = call(
@@ -216,8 +237,9 @@ def setup(workspace_id, branch, strategy):
 def update(workspace_id):
     state = git_state(workspace_id)
     if state == "NotConnected":
-        print("Workspace is not connected to Git yet - skipping. Run the setup workflow first.")
+        print("Workspace is not connected to Git yet - skipping. Connect it to Git first (guide Step 7).")
         return
+    ensure_my_git_credentials(workspace_id)
     update_from_git(workspace_id)
 
 
@@ -235,14 +257,13 @@ def main():
 
     args = parser.parse_args()
     if not args.workspace_id:
-        sys.exit("Workspace ID is empty - check the repository variables.")
+        sys.exit("Workspace ID is empty - check the repository variables. ")
 
     sign_in()
     if args.command == "setup":
         setup(args.workspace_id, args.branch, args.strategy)
     else:
         update(args.workspace_id)
-
 
 if __name__ == "__main__":
     main()
