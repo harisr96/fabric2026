@@ -6,9 +6,9 @@ ci_checks.py - checks that run on every pull request (GitHub Actions: Fabric CI)
 2. Notebook code (not the Fabric '# META' metadata lines) has no hard-coded GUIDs,
    so it keeps working in every workspace. Use lakehouse.schema.table names instead.
 3. Notebook code is valid Python (cell magics like %%sql are skipped).
-4. No obvious secrets (client secrets, GitHub tokens) are committed under fabric/.
+4. No obvious secrets (client secrets, GitHub tokens) are committed in Fabric items.
 
-Usage: python ci_checks.py --base BASE_BRANCH --head HEAD_BRANCH [--root fabric]
+Usage: python ci_checks.py --base BASE_BRANCH --head HEAD_BRANCH [--root .]
 """
 import argparse
 import ast
@@ -23,6 +23,13 @@ SECRETS = [
     re.compile(r"(?i)client_?secret\s*[=:]\s*['\"][^'\"]{8,}['\"]"),
 ]
 ALLOWED_SOURCES = {"test": {"develop"}, "main": {"test"}}
+SKIP_DIRS = {".git", ".github"}   # automation files, not Fabric items
+
+
+def item_files(root, pattern):
+    for path in sorted(root.rglob(pattern)):
+        if path.is_file() and not SKIP_DIRS.intersection(path.relative_to(root).parts):
+            yield path
 
 
 def check_branch_flow(base, head):
@@ -42,7 +49,7 @@ def is_marker(line):
 
 def check_notebooks(root):
     problems = []
-    for path in sorted(root.rglob("notebook-content.py")):
+    for path in item_files(root, "notebook-content.py"):
         lines = path.read_text(encoding="utf-8").splitlines()
         python_lines = []          # same length as the file, so error line numbers stay exact
         in_magic_cell = False      # a cell that starts with %%sql, %%pyspark etc. is not Python
@@ -74,7 +81,7 @@ def check_notebooks(root):
 
 def check_secrets(root):
     problems = []
-    for path in sorted(p for p in root.rglob("*") if p.is_file()):
+    for path in item_files(root, "*"):
         try:
             text = path.read_text(encoding="utf-8")
         except (UnicodeDecodeError, OSError):
@@ -90,7 +97,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--base", required=True)
     parser.add_argument("--head", required=True)
-    parser.add_argument("--root", default="fabric")
+    parser.add_argument("--root", default=".")
     args = parser.parse_args()
 
     root = pathlib.Path(args.root)

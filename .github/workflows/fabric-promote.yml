@@ -41,20 +41,22 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -e
+          # Fabric items live at the repo root; ignore the automation folder and Markdown files.
+          ITEMS=(-- . ':(exclude).github' ':(exclude)*.md')
           if [ "${{ github.ref_name }}" = "test" ]; then
             git fetch origin develop
-            if ! git diff --quiet origin/develop HEAD -- fabric/; then
-              echo "STOP: fabric/ on test differs from develop. Promote to test only by a pull request from develop."
-              git diff --stat origin/develop HEAD -- fabric/
+            if ! git diff --quiet origin/develop HEAD "${ITEMS[@]}"; then
+              echo "STOP: Fabric items on test differ from develop. Promote to test only by a pull request from develop."
+              git diff --stat origin/develop HEAD "${ITEMS[@]}"
               exit 1
             fi
             echo "to=test" >> "$GITHUB_OUTPUT"
             echo "dev_commit=$(git rev-parse origin/develop)" >> "$GITHUB_OUTPUT"
           else
             git fetch origin test
-            if ! git diff --quiet origin/test HEAD -- fabric/; then
-              echo "STOP: fabric/ on main differs from test. Release to main only by a pull request from test."
-              git diff --stat origin/test HEAD -- fabric/
+            if ! git diff --quiet origin/test HEAD "${ITEMS[@]}"; then
+              echo "STOP: Fabric items on main differ from test. Release to main only by a pull request from test."
+              git diff --stat origin/test HEAD "${ITEMS[@]}"
               exit 1
             fi
             test_sha=$(git rev-parse origin/test)

@@ -3,7 +3,7 @@ name: Fabric deploy DEV (update DEV after merge to develop)
 on:
   push:
     branches: [develop]
-    paths: ["fabric/**"]
+    paths-ignore: [".github/**", "**/*.md", "*.md"]
   workflow_dispatch:
 
 permissions:

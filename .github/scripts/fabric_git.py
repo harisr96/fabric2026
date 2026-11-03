@@ -14,7 +14,7 @@ Environment variables (set as GitHub secrets / variables)
   FABRIC_GIT_PAT                                           GitHub token (setup only)
   GH_OWNER, GH_REPO                                        e.g. hari-sr / fabric2026
   FABRIC_GIT_CONNECTION_NAME                               optional, default github-fabric2026-sp
-  FABRIC_GIT_FOLDER                                        optional, default fabric
+  FABRIC_GIT_FOLDER                                        optional, default: repo root
 """
 import argparse
 import os
@@ -73,13 +73,20 @@ def call(method, path, body=None):
 
 
 def get_or_create_connection():
-    """A Fabric connection that stores the GitHub token. The service principal owns it."""
+    """The Fabric connection that stores the GitHub token.
+
+    Recommended (Microsoft's documented pattern): create it yourself in Fabric
+    (Manage connections and gateways) and share it with the service principal.
+    The script then finds it by name. Only if it can't find it does it try to
+    create one itself, which some tenants don't allow for service principals.
+    """
     name = os.environ.get("FABRIC_GIT_CONNECTION_NAME") or "github-fabric2026-sp"
     for connection in call("GET", "/connections").get("value", []):
         if connection.get("displayName") == name:
             print(f"Using existing connection '{name}'")
             return connection["id"]
 
+    print(f"Connection '{name}' not found or not shared with the service principal - trying to create it ...")
     owner, repo = env("GH_OWNER"), env("GH_REPO")
     body = {
         "displayName": name,
@@ -98,9 +105,18 @@ def get_or_create_connection():
             "credentials": {"credentialType": "Key", "key": env("FABRIC_GIT_PAT")},
         },
     }
-    created = call("POST", "/connections", body)
+    response = SESSION.post(f"{API}/connections", json=body)
+    if response.status_code >= 400:
+        sys.exit(
+            f"STOP: the service principal can't create the GitHub connection ({response.status_code}).\n"
+            f"Fix: in Fabric open gear > Manage connections and gateways > + New > Cloud,\n"
+            f"  name '{name}', type GitHub (source control), URL https://github.com/{owner}/{repo},\n"
+            f"  key = your fabric2026-sp-connection token. Then ... > Manage users > add the\n"
+            f"  service principal (or its security group) as User, and re-run this workflow.\n"
+            f"Details: {response.text}"
+        )
     print(f"Created connection '{name}'")
-    return created["id"]
+    return response.json()["id"]
 
 
 def git_state(workspace_id):
@@ -150,17 +166,33 @@ def setup(workspace_id, branch, strategy):
 
     if state == "NotConnected":
         connection_id = get_or_create_connection()
+        folder = (os.environ.get("FABRIC_GIT_FOLDER") or "").strip("/")   # empty = repo root
+        details = {
+            "gitProviderType": "GitHub",
+            "ownerName": env("GH_OWNER"),
+            "repositoryName": env("GH_REPO"),
+            "branchName": branch,
+        }
+        if folder:
+            details["directoryName"] = folder
         body = {
-            "gitProviderDetails": {
-                "gitProviderType": "GitHub",
-                "ownerName": env("GH_OWNER"),
-                "repositoryName": env("GH_REPO"),
-                "branchName": branch,
-                "directoryName": os.environ.get("FABRIC_GIT_FOLDER") or "fabric",
-            },
+            "gitProviderDetails": details,
             "myGitCredentials": {"source": "ConfiguredConnection", "connectionId": connection_id},
         }
-        call("POST", f"/workspaces/{workspace_id}/git/connect", body)
+        response = SESSION.post(f"{API}/workspaces/{workspace_id}/git/connect", json=body)
+        if response.status_code == 404:
+            sys.exit(
+                f"STOP: GitHub couldn't find the repo, branch or folder (404).\n"
+                f"Check: 1) branch '{branch}' exists"
+                + (f" and the folder '{folder}/' exists on it (add '{folder}/README.md' if not)" if folder else "")
+                + ";\n"
+                f"       2) the token in the Fabric connection covers {env('GH_OWNER')}/{env('GH_REPO')} "
+                f"with Contents: Read and write and hasn't expired;\n"
+                f"       3) the connection URL is https://github.com/{env('GH_OWNER')}/{env('GH_REPO')}.\n"
+                f"Details: {response.text}"
+            )
+        if response.status_code >= 400:
+            sys.exit(f"POST /workspaces/{workspace_id}/git/connect failed ({response.status_code}): {response.text}")
         print(f"Connected workspace to branch '{branch}'.")
         state = "Connected"
 
