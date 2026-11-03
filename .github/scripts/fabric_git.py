@@ -257,14 +257,13 @@ def main():
 
     args = parser.parse_args()
     if not args.workspace_id:
-        sys.exit("Workspace ID is empty - check the repository variables.")
+        sys.exit("Workspace ID is empty - check the repository variables. ")
 
     sign_in()
     if args.command == "setup":
         setup(args.workspace_id, args.branch, args.strategy)
     else:
         update(args.workspace_id)
-
 
 if __name__ == "__main__":
     main()
