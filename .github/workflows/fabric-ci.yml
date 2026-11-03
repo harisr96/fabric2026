@@ -1,0 +1,31 @@
+name: Fabric CI
+
+# CI = continuous integration. Runs .github/scripts/fabric_ci.py on every pull request
+# into develop, test or main.
+# Make the "checks" job required in the branch ruleset so a failing check blocks the merge.
+on:
+  pull_request:
+    branches: [develop, test, main]
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Get the code of the pull request
+        uses: actions/checkout@v4
+
+      - name: Install Python (no extra packages needed)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run the CI checks (prints [PASS] / [FAIL] for each check)
+        # base_ref = the branch the pull request goes INTO, head_ref = the branch it comes FROM
+        run: >
+          python .github/scripts/fabric_ci.py
+          --base "${{ github.base_ref }}"
+          --head "${{ github.head_ref }}"
