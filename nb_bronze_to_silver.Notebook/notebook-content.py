@@ -145,3 +145,14 @@ display(spark.sql("SELECT * FROM bronze.dbo.orders"))
 # META   "language": "python",
 # META   "language_group": "synapse_pyspark"
 # META }
+
+# CELL ********************
+
+display(spark.sql("SELECT * FROM bronze.dbo.orders"))
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
