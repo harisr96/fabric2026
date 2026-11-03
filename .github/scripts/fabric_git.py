@@ -172,9 +172,8 @@ def setup(workspace_id, branch, strategy):
             "ownerName": env("GH_OWNER"),
             "repositoryName": env("GH_REPO"),
             "branchName": branch,
+            "directoryName": folder or "/",   # "/" = repo root (Fabric requires this field)
         }
-        if folder:
-            details["directoryName"] = folder
         body = {
             "gitProviderDetails": details,
             "myGitCredentials": {"source": "ConfiguredConnection", "connectionId": connection_id},
