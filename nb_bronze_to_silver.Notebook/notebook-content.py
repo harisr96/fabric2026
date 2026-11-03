@@ -23,19 +23,19 @@
 # META       ]
 # META     },
 # META     "warehouse": {
-# META       "default_warehouse": "418e911e-9aca-40ec-b14b-0386e8bb1bfb",
-# META       "known_warehouses": [
-# META         {
-# META           "id": "418e911e-9aca-40ec-b14b-0386e8bb1bfb",
-# META           "type": "Lakewarehouse"
-# META         },
-# META         {
-# META           "id": "44af7316-dd7d-490f-8fa1-829d6d91eb81",
-# META           "type": "Lakewarehouse"
-# META         }
-# META       ]
+# META       "known_warehouses": []
 # META     }
 # META   }
+# META }
+
+# CELL ********************
+
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
 # META }
 
 # CELL ********************
@@ -99,6 +99,56 @@ GROUP BY c.customer_id, c.first_name, c.last_name, c.country
 
 display(spark.sql("SELECT * FROM bronze.dbo.customers"))
 display(spark.sql("SELECT * FROM silver.dbo.customer_summary ORDER BY total_amount DESC"))
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# MARKDOWN ********************
+
+
+# CELL ********************
+
+display(spark.sql("SELECT * FROM bronze.dbo.orders"))
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
+spark.sql("""INSERT INTO bronze.dbo.orders VALUES
+        (105, 1, DATE'2026-10-01', 120.50), (102, 1, DATE'2026-10-15', 80.00),
+        (106, 2, DATE'2026-10-20', 45.25),  (104, 3, DATE'2026-10-28', 300.00)""")
+
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
+display(spark.sql("SELECT * FROM bronze.dbo.orders"))
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
+display(spark.sql("SELECT * FROM bronze.dbo.orders"))
 
 # METADATA ********************
 
